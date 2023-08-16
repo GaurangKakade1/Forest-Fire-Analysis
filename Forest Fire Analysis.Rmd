@@ -1,0 +1,281 @@
+---
+title: "Forest Fire Analysis"
+author: "Eric, Sagan, and Gaurang"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+# Code style - tidyverse 
+```
+
+```{r load_package}
+#| message = FALSE,
+#| warning = FALSE
+
+packages <- c("tidyverse", "knitr", "kableExtra",
+              "ggplot2", "psych", "esquisse","rvest")
+
+invisible(lapply(X = packages, FUN = library, character.only = TRUE, quietly = TRUE))
+```
+
+## Background
+
+***Format***: A data frame with 517 observations on the following 13 variables.
+
+-   X - West to east coordinates for the site (1=farthest west to 9= farthest east)
+-   Y - North to south coordinates for the site (1=farthest north to 9=farthest south)
+-   Month - Month of the year (Jan to Dec)
+-   Day - Day of the week (Sun to Sat)
+-   FFMC - Fine fuel moisture code
+-   DMC - Duff moisture code
+-   DC - Drought code
+-   ISI - Initial spread index
+-   Temp - Outside temperature (in Celsius)
+-   RH - Relative humidity (in %)
+-   Wind - Wind speed (in km/h)
+-   Rain - Rain in past 30 minutes (in mm/sq-m)
+-   Area - Total burned area (in hectares)
+
+***Detail came with the data sets:***\
+Data were recorded for fires in the Montesinho natural park in Portugal between January 2000 and December 2003. A map of the park is divided into 9x9 grid sections (given by the x,y-coordinates in the first two columns of the data set). There are four components of a Fire Weather Index that rate how weather conditions might increase fire danger. FFMC. DMC, and DC reflect various measures of moisture content, while the ISI score indicated how fast a fire might spread (for example, by wind). For all four measures larger values are associated with more fire danger. Fires that are less than 100 square meters in size (0.01 hectares) are recorded as Area=0.
+
+***FWI System***\
+![Figure 1 (Cited from Natural Resources Canada)](https://cwfis.cfs.nrcan.gc.ca/images/fwi_structure.gif)
+
+Figure 1 demonstrate the Canadian forest fire weather index system, also known as FWI. The picture explains the relationship between each fire weather observations connect to each of the moisture code and how each variable contribute to the fire behavior indices.
+
+***Elaboration on each of the Fuel Moisture Code***
+
+FFMC - Represent the fuel moisture content of forest litter fuels under the shade of a forest canopy, ranging from 0 to 101. The higher the FFMC, the higher risk of having a forest fire.
+
+DMC - Represents the moisture content of decomposed organic material underneath the litter. Ranging from 0 to infinite.
+
+DC - Represents the level of drying in the soil. Ranging from 0 to infinite.
+
+ISI - Higher ISI means more dangerous in the level of fire.
+
+## Research questions
+
+1)  What's the most significant predictor (FFMC, DMC, DC) for the total burned area?
+    -   $H_{0}$: None of the predictors are significant.
+    -   $H_{A}$: All, or some of the predictors are significant.
+2)  How does this data set in the region of the world compare to other regions during this time period?
+
+## Discussion
+
+```{r load_data_file}
+# Load csv file from file explorer
+# Use setwd() to change directory, make sure RMD file and csv file are on the same directory
+forest_fire <- read.csv("ForestFires.csv")
+
+View(forest_fire)
+```
+
+```{r load_data_URL}
+#| eval = FALSE
+
+# Load csv file from github
+# The token changes every time you click away
+forest_fire <- read.csv(file = "https://raw.githubusercontent.com/Stat184-Hatfield-Fall2022/FP_Eric_Gaurang_Sagan/main/ForestFires.csv?token=GHSAT0AAAAAAB3JILABOGXLVF7IUPC27JECY4QVVRA")
+
+View(forest_fire)
+```
+
+```{r data_cleaning}
+forest_fire <- forest_fire %>%
+  mutate(Area = log(Area + 1)) %>%  # Convert actual area
+  dplyr::filter(Area != 0)  # Remove all Area = 0 cases
+```
+
+```{r summary_forest_fire}
+describeBy(forest_fire, fast = TRUE)
+
+```
+The above table is a Summary table for the Forest Fire data. The summary table incorporates 10 variables namely X, Y, Month, Day, FFMC, DMC, DC, ISI, Temp and RH. There are 13 columns namely vars telling us the column number, n stating number of valid cases, mean giving the mean value, median stating the median values, trimmed which is nothing but the trimmed mean, sd giving the standard deviation, mad revealing the stats for the median absolute deviation (extracted from median), min revealing the minimum values, max revealing the maximum values, range providing the range of values (max – min), skew telling the skewness, kurtosis stating the kurtosis (kurtosis is a measure of the "tailedness" of the probability distribution of a real-valued random variable) and se giving the standard error. 
+
+```{r EDA}
+#| eval = FALSE,
+#| include = FALSE
+
+esquisse::esquisser(forest_fire)
+```
+
+### Multiple regression model
+
+```{r data_visual_FFMC_to_Area}
+coe_FFMC <- cor(forest_fire$FFMC, forest_fire$Area) # Calculate correlation coefficient 
+ggplot(forest_fire) +
+  aes(x = FFMC, y = Area) +
+  geom_point(shape = "circle", size = 1.5, colour = "#112446") +
+  labs(
+    x = "FFMC",
+    y = "Area (Hetcares)",
+    caption = paste('r = ', round(coe_FFMC, 3)) # Add correlation coefficient to the graph
+  ) +
+  ggtitle("Figure 2: Association between FFMC and Area") +
+  theme_classic() +
+  geom_smooth(method='lm') + # Include a linear regression
+  theme(plot.title = element_text(hjust = 0.5)) # Adjust the title to the center
+```
+
+Figure 2 shows a scatter plot between Area in hectares and the FFMC scale with a linear regression line. All cases with Area = 0 is filter because they aren't significant to the scatter plot. A correlation coefficient is on the bottom right corner indicate the level of correlation. For figure 2, a r = `r round(coe_FFMC, 3)` demonstrate that there's close to no association between FFMC and Area.
+
+```{r data_visual_DMC_to_Area}
+coe_DMC <- cor(forest_fire$DMC, forest_fire$Area) # Calculate correlation coefficient 
+ggplot(forest_fire) +
+  aes(x = DMC, y = Area) +
+  geom_point(shape = "circle", size = 1.5, colour = "#112446") +
+  labs(
+    x = "DMC",
+    y = "Area (Hetcares)", 
+    caption = paste('r = ', round(coe_DMC, 3)) # Add correlation coefficient to the graph
+  ) +
+  ggtitle("Figure 3: Association between DMC and Area") +
+  theme_classic() +
+  geom_smooth(method='lm') + # Include a linear regression
+  theme(plot.title = element_text(hjust = 0.5)) # Adjust the title to the center
+```
+
+```{r data_visual_DC_to_Area}
+coe_DC <- cor(forest_fire$DC, forest_fire$Area) # Calculate correlation coefficient 
+ggplot(forest_fire) +
+  aes(x = DC, y = Area) +
+  geom_point(shape = "circle", size = 1.5, colour = "#112446") +
+  labs(
+    x = "DC",
+    y = "Area (Hetcares)", 
+    caption = paste('r = ', round(coe_DC, 3)) # Add correlation coefficient to the graph
+  ) +
+  ggtitle("Figure 4: Association between DC and Area") +
+  theme_classic() +
+  geom_smooth(method='lm') + # Include a linear regression
+  theme(plot.title = element_text(hjust = 0.5)) # Adjust the title to the center
+```
+
+Unfortunately, both figure 3 and 4 provides no association between the corresponding moisture code with the total area burn, as the correlation coefficient are closes to zero.
+
+```{r multiple_regression_model}
+model <- lm(Area ~ FFMC + DMC + DC, data = forest_fire) # Create multiple regression
+model <- summary(model)
+model$coefficients %>%
+  kable(
+    caption = "<center>Table 1: Significant Level of Each Predictor</center>",
+    booktab = TRUE,
+    align = c(rep('c', 4)),
+    digits = 2
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c('striped', 'condensed'),
+  )
+```
+
+The table 1 demonstrated the coefficient, standard error, t value, and the p-value of this multiple linear regression model. With a multiple regression equation of Area = 1.88 - 0.01FFMC and a R^2^ value of `r round(model$r.squared, 3)`. Based on the p-value of each predictor and the R^2^ value, we believe that this model is not a good model for predicting area burned in the future as it only predicts `r round(model$r.squared, 3) * 100`% of the variation on the area burned. In addition, none of the p-value are under the significance level of 5%. So we can't reject the null hypothesis.
+
+### Comparison between data sets
+
+The data set below details the number of fires, the total acres burned in each fire, and the year in which the data was recorded. The data comes from the National Centers for Environmental Information.
+
+```{r dataScraping}
+# The code below scrapes the data from the desired site and creates a table
+fire_table <- read_html(x = "https://www.ncdc.noaa.gov/sotc/fire/200313")%>%
+  html_elements(css = "table")%>%
+  html_table()
+
+fire_table2003 <- bind_cols(fire_table[0], fire_table[1])
+
+#EDA for this table
+
+ggplot(fire_table2003) +
+  aes(
+    x = `As of November 28`,
+    y = `Nationwide Number of Fires`
+  ) +
+  geom_tile() +
+  labs(
+    x = "Date",
+    y = "Number of Fires",
+    title = "Figure 6: Number of Fires 2001-2003"
+  ) +
+  theme_minimal()
+
+
+ggplot(fire_table2003) +
+  aes(
+    x = `As of November 28`,
+    y = `Nationwide Number of Acres Burned`
+  ) +
+  geom_tile() +
+  labs(
+    x = "Date",
+    y = "Number of Acres",
+    title = "Figure 7: Number of Acres Burned 2001-2003"
+  ) +
+  theme_minimal()
+
+```
+
+Based on the plots above, we can see some correlations and get some ideas of what we would want to test and/or compare to the other set of forest fire data. Based on this I will try to see if there is a statistical relationship between the two data sets.
+
+```{r dataComparison}
+
+forest_fire_v2 <- forest_fire%>%
+  mutate(AreaSum = sum(Area, na.rm = FALSE))%>%
+  mutate(AreaSum = AreaSum*2.47105)
+
+# The code above sums the area of the number of hectares burned and then converts the area to acres in order to better compare to the other data set 
+
+column0 <- c("Forest_Fires Data Set", "fireTable2003 Data Set")
+column1 <- c(517, 16412.84)
+column2 <- c(215459, 11305773)
+column3 <- c(16412.84/517,11305773/215459 )
+
+comparison_df <- data.frame(column0, column1, column2, column3)
+colnames(comparison_df) <- c("Data Set","Number of Fires", "Acres Burned", "Average Acre per Fire")
+```
+
+The comparison dataframe shows the number of fires in each data set, the total number of acres burned in each data set and the average acres burned fire. I created this column in order to better compare the data sets instead of just the total number of acres and fires for each data set. Row 1 corresponds to the forest_fires data set and row 2 corresponds to the fire_table2003 data set.
+
+```{r comparisonVis}
+ggplot(comparison_df) +
+  aes(
+    x = `Data Set`,
+    y = `Average Acre per Fire`,
+    fill = `Acres Burned`
+  ) +
+  geom_col() +
+  scale_fill_gradient() +
+  labs(
+    x = "Data Set",
+    y = "Average Acres Burned",
+    title = "Figure 8: Data Set Comparison"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+The visualization above shows the average number of acres burned per fire for each data set, both of which span 2001-2003. The color of the bars represents the total number of acres burned for each data set.
+
+## Summary/Conclusion
+
+By gathering information from different data visualizations, tables, and other statistics. We can conclude:
+
+1.  There are no association between the three moisture code and the area. In facts, using only the three moisture code is not an effective way to predict fire behaviors. And we fail to reject the null hypothesis based on the p-value from the summary table.
+
+2.  From the results above we can answer the second research question which poses the question: How does this data set in the region of the world compare to other regions during this time period? Based on the analysis data frame and visualization it is evident that the fireTable2003 data set, which covered fires from around the world, was notable higher than that for the Forest_Fires data set. If we treat the fireTable2003 data set almost as a control group to use as comparison, we can see that the fires that occurred in Montesinho natural park in Portugal between January 2000 and December 2003 were, on average, not as severe as those fires globally. I believe that the comparison of data made in this report is important because it can put into perspective the meaning of the numbers in each data set. For example, if we were to just look at the Forest_Fires data set alone, we would not necessarily know the significance of the numbers in the data set. Once we compare these numbers to another data set, we can see the significance and relevance of the numbers.
+
+## Reference
+
+See attachment
+
+## Code Appendix
+
+```{r codeAppendix}
+#| ref.label = knitr::all_labels(),
+#| echo = TRUE,
+#| eval = FALSE
+
+```
